@@ -6,7 +6,7 @@
 # Utiliza Docker Swarm + Traefik + validação de domínio com SSL Let's Encrypt.
 #
 # 🔗 Este script é um complemento (addon) para o instalador oficial SetupOrion:
-# https://github.com/oriondesign2015/SetupOrion
+# https://oriondesign.art.br/setup
 #
 # Desenvolvido para uso com a estrutura de rede e stack definida pelo SetupOrion.
 # ------------------------------------------------------------------------------
