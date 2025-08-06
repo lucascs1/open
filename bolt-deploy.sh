@@ -78,11 +78,8 @@ if [[ "$USE_DOMAIN" == "s" || "$USE_DOMAIN" == "y" ]]; then
   read -p "🔗 Informe o domínio completo (ex: exemplo.com): " DOMAIN
   echo "🌐 Verificando apontamento do domínio..."
 
-  # Obter IPs da VPS (IPv4 e IPv6)
   VPS_IPV4=$(curl -s https://ipv4.icanhazip.com)
   VPS_IPV6=$(curl -s https://ipv6.icanhazip.com)
-
-  # Obter todos os IPs do domínio
   DOMAIN_IPS=$(dig +short "$DOMAIN")
 
   MATCHED=false
@@ -104,7 +101,6 @@ if [[ "$USE_DOMAIN" == "s" || "$USE_DOMAIN" == "y" ]]; then
   echo "✅ Domínio validado com sucesso."
 fi
 
-# 📁 Estrutura de diretórios
 BASE_DIR="/root/bolt-sites/$PROJECT_SLUG"
 PROJECT_DIR="$BASE_DIR/project"
 BACKUP_DIR="$BASE_DIR/backups"
@@ -121,25 +117,21 @@ fi
 mkdir -p "$PROJECT_DIR"
 mkdir -p "$BACKUP_DIR"
 
-# 🔐 Backup
 if [[ -f "$PROJECT_DIR/package.json" ]]; then
   echo "🧰 Backup do projeto atual..."
   mv "$PROJECT_DIR" "$BACKUP_DIR/project-$TIMESTAMP"
   mkdir -p "$PROJECT_DIR"
 fi
 
-# 📦 Extração
 echo "📦 Extraindo novo projeto..."
 unzip -o "$ZIP_PATH" -d "$PROJECT_DIR"
 
-# ⚙️ Corrigir estrutura duplicada (caso o ZIP tenha uma pasta interna 'project/')
 if [[ -d "$PROJECT_DIR/project" ]]; then
   echo "🔄 Corrigindo estrutura de pastas..."
   mv "$PROJECT_DIR/project/"* "$PROJECT_DIR/"
   rm -rf "$PROJECT_DIR/project"
 fi
 
-# 🔧 Correções
 PKG_JSON="$PROJECT_DIR/package.json"
 if [[ ! -f "$PKG_JSON" ]]; then
   echo "❌ package.json não encontrado. Abortando."
@@ -156,10 +148,13 @@ fi
 VITE_CONFIG="$PROJECT_DIR/vite.config.ts"
 if [[ -f "$VITE_CONFIG" ]] && ! grep -q 'preview:' "$VITE_CONFIG"; then
   echo "🛠️ Adicionando bloco preview em vite.config.ts..."
-  sed -i "/defineConfig({/a \  preview: {\n    port: 4173,\n    host: true,\n    allowedHosts: ['$DOMAIN']\n  }," "$VITE_CONFIG"
+  sed -i "/defineConfig({/a \  preview: {
+    port: 4173,
+    host: true,
+    allowedHosts: ['$DOMAIN']
+  }," "$VITE_CONFIG"
 fi
 
-# 📄 Dockerfile
 DOCKERFILE="$PROJECT_DIR/Dockerfile"
 if [[ ! -f "$DOCKERFILE" ]]; then
   echo "📄 Criando Dockerfile..."
@@ -180,7 +175,6 @@ CMD ["vite", "preview", "--host", "0.0.0.0", "--port", "4173"]
 EOF
 fi
 
-# 📄 docker-compose.yaml
 DOCKER_COMPOSE="$PROJECT_DIR/docker-compose.yaml"
 if [[ ! -f "$DOCKER_COMPOSE" ]]; then
   echo "📄 Criando docker-compose.yaml..."
@@ -211,7 +205,6 @@ networks:
 EOF
 fi
 
-# ▶️ Deploy
 cd "$PROJECT_DIR"
 
 if [[ "$IS_FIRST_DEPLOY" = false ]]; then
@@ -234,21 +227,17 @@ echo "🚀 Preparando envio da stack para o Portainer..."
 
 STACK_NAME="$PROJECT_SLUG"
 STACK_FILE_PATH="$PROJECT_DIR/docker-compose.yaml"
-
-# Pasta temporária para armazenar respostas
 TMP_DIR="/tmp/deploy_$STACK_NAME"
 mkdir -p "$TMP_DIR"
 trap "rm -rf $TMP_DIR" EXIT
 response_output="$TMP_DIR/response.json"
 erro_output="$TMP_DIR/erro.log"
 
-# Validar variáveis essenciais
 if [[ -z "$PORTAINER_URL" || -z "$TOKEN" || -z "$ENDPOINT_ID" || -z "$SWARM_ID" ]]; then
   echo "❌ Variáveis do Portainer não definidas corretamente. Abortando."
   exit 1
 fi
 
-# Verificar se a stack já existe
 echo "🔍 Verificando existência da stack '$STACK_NAME'..."
 EXISTING_STACK_ID=$(curl -sk -H "Authorization: Bearer $TOKEN" \
   "https://$PORTAINER_URL/api/stacks" | jq -r ".[] | select(.Name==\"$STACK_NAME\") | .Id")
@@ -260,7 +249,6 @@ if [[ -n "$EXISTING_STACK_ID" ]]; then
   sleep 3
 fi
 
-# Criar nova stack
 echo "📦 Criando nova stack via Portainer API..."
 http_code=$(curl -s -o "$response_output" -w "%{http_code}" -k -X POST \
   -H "Authorization: Bearer $TOKEN" \
@@ -282,7 +270,6 @@ else
   exit 1
 fi
 
-# ✅ Verificação
 echo "⏳ Verificando status da stack no Docker Swarm..."
 sleep 5
 for i in {1..10}; do
@@ -294,7 +281,7 @@ for i in {1..10}; do
   fi
   echo "⏳ Tentando novamente ($i/10)..."
   sleep 3
-done
+ done
 
 echo "❌ O projeto não subiu corretamente. Verifique logs com:"
 echo "   docker service logs ${PROJECT_SLUG}_${PROJECT_SLUG}"
