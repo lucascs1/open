@@ -18,27 +18,31 @@ if [[ -f "$PORTAINER_VARS" ]]; then
   PORTAINER_URL=$(grep -oP '(?<=Dominio do portainer: ).*' "$PORTAINER_VARS")
   TOKEN=$(grep -oP '(?<=Token: ).*' "$PORTAINER_VARS")
 
-  response_endpoints=$(curl -k -s -X GET -H "Authorization: Bearer $TOKEN" "https://$PORTAINER_URL/api/endpoints")
-  if ! echo "$response_endpoints" | jq empty 2>/dev/null; then
-    echo "❌ Erro ao buscar endpoints. Verifique o TOKEN ou a URL do Portainer."
-    echo "Resposta da API: $response_endpoints"
+  response_endpoints=$(curl -sk -H "Authorization: Bearer $TOKEN" "https://$PORTAINER_URL/api/endpoints")
+  if ! echo "$response_endpoints" | jq type | grep -q 'array'; then
+    echo "❌ Erro: resposta inesperada da API de endpoints do Portainer."
+    echo "Resposta recebida: $response_endpoints"
     exit 1
   fi
 
-  ENDPOINT_ID=$(echo "$response_endpoints" | jq -r '.[] | select(.Name == "primary") | .Id')
+  ENDPOINT_ID=$(echo "$response_endpoints" | jq -r 'map(select(.Name == "primary")) | .[0].Id')
   if [[ -z "$ENDPOINT_ID" ]]; then
-    echo "❌ ENDPOINT_ID não encontrado. Verifique o nome do endpoint no Portainer (esperado: 'primary')."
+    echo "❌ ENDPOINT_ID não encontrado. Verifique se o endpoint 'primary' existe no Portainer."
     exit 1
   fi
 
-  response_swarm=$(curl -k -s -X GET -H "Authorization: Bearer $TOKEN" "https://$PORTAINER_URL/api/endpoints/$ENDPOINT_ID/docker/swarm")
-  if ! echo "$response_swarm" | jq empty 2>/dev/null; then
-    echo "❌ Erro ao buscar informações do Swarm. Verifique o ENDPOINT_ID e as permissões da API."
-    echo "Resposta da API: $response_swarm"
+  response_swarm=$(curl -sk -H "Authorization: Bearer $TOKEN" "https://$PORTAINER_URL/api/endpoints/$ENDPOINT_ID/docker/swarm")
+  if ! echo "$response_swarm" | jq type | grep -q 'object'; then
+    echo "❌ Erro: resposta inesperada da API do Swarm."
+    echo "Resposta recebida: $response_swarm"
     exit 1
   fi
 
   SWARM_ID=$(echo "$response_swarm" | jq -r .ID)
+  if [[ -z "$SWARM_ID" || "$SWARM_ID" == "null" ]]; then
+    echo "❌ SWARM_ID inválido. Verifique se o Swarm está ativo no endpoint."
+    exit 1
+  fi
 else
   echo "❌ Arquivo de variáveis do Portainer não encontrado: $PORTAINER_VARS"
   exit 1
