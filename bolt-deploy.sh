@@ -16,7 +16,18 @@ set -e
 PORTAINER_VARS="/root/dados_vps/dados_portainer"
 if [[ -f "$PORTAINER_VARS" ]]; then
   PORTAINER_URL=$(grep -oP '(?<=Dominio do portainer: ).*' "$PORTAINER_VARS")
-  TOKEN=$(grep -oP '(?<=Token: ).*' "$PORTAINER_VARS")
+  PORTAINER_USER=$(grep -oP '(?<=Usuario: ).*' "$PORTAINER_VARS")
+  PORTAINER_PASS=$(grep -oP '(?<=Senha: ).*' "$PORTAINER_VARS")
+
+  # Obter novo token JWT
+  TOKEN=$(curl -sk -X POST "https://$PORTAINER_URL/api/auth" \
+    -H "Content-Type: application/json" \
+    -d "{\"Username\":\"$PORTAINER_USER\", \"Password\":\"$PORTAINER_PASS\"}" | jq -r .jwt)
+
+  if [[ -z "$TOKEN" || "$TOKEN" == "null" ]]; then
+    echo "❌ Falha ao autenticar no Portainer. Verifique usuário e senha."
+    exit 1
+  fi
 
   response_endpoints=$(curl -sk -H "Authorization: Bearer $TOKEN" "https://$PORTAINER_URL/api/endpoints")
   if ! echo "$response_endpoints" | jq type | grep -q 'array'; then
@@ -145,14 +156,22 @@ else
   sed -i '/"scripts": {/a \    "preview": "vite preview --port 4173 --host 0.0.0.0",' "$PKG_JSON"
 fi
 
+# Ajuste seguro para bloco preview no vite.config.ts
 VITE_CONFIG="$PROJECT_DIR/vite.config.ts"
 if [[ -f "$VITE_CONFIG" ]] && ! grep -q 'preview:' "$VITE_CONFIG"; then
   echo "🛠️ Adicionando bloco preview em vite.config.ts..."
-  sed -i "/defineConfig({/a \  preview: {
-    port: 4173,
-    host: true,
-    allowedHosts: ['$DOMAIN']
-  }," "$VITE_CONFIG"
+  awk -v domain="$DOMAIN" '
+    /defineConfig\(\{/ {
+      print;
+      print "  preview: {";
+      print "    port: 4173,";
+      print "    host: true,";
+      print "    allowedHosts: [\"" domain "\"]";
+      print "  },";
+      next
+    }
+    { print }
+  ' "$VITE_CONFIG" > "$VITE_CONFIG.tmp" && mv "$VITE_CONFIG.tmp" "$VITE_CONFIG"
 fi
 
 DOCKERFILE="$PROJECT_DIR/Dockerfile"
